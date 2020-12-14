@@ -3,7 +3,7 @@ kind: Deployment
 metadata:
   name: story-deployment
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app: story
@@ -15,3 +15,11 @@ spec:
       containers:
         - name: story
           image: neptunes032/kub-data-demo:2
+          volumeMounts:
+            - mountPath: /app/story
+              name: story-volume
+      volumes:
+        - name: story-volume
+          hostPath:
+            path: /data
+            type: DirectoryOrCreate
