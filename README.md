@@ -1,6 +1,7 @@
 # kube-volume-starter
 
 * 쿠버네티스 불륨 사용해보기
+* 환경변수 사용해보기
 * [깃허브 링크](https://github.com/raiders032/kube-volume-starter)
 
 
@@ -449,7 +450,7 @@ ___
 
 
 
-## 환경변수 사용해보기
+# 환경변수 사용해보기
 
 app.js 코드 변경
 
