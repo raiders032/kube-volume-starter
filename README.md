@@ -1,5 +1,7 @@
 # kube-volume-starter
+
 * 쿠버네티스 불륨 사용해보기
+* [깃허브 링크](https://github.com/raiders032/kube-volume-starter)
 
 
 
@@ -222,14 +224,15 @@ kubelctl apply
 
 ### emptyDir의 문제점
 
-* deployment.yaml 에서 repilcas를 2로 바꾼다.
+* pod에 종속적이다.
+  * pod가 제거되면 emptyDir volume도 제거된다.
 
-1. GET http://192.168.99.100:30084/story
+1. deployment.yaml 에서 repilcas를 2로 바꾼다.
+2. GET http://192.168.99.100:30084/story
    * 정삭작동
-2. GET http://192.168.99.100:30084/error
-3. GET http://192.168.99.100:30084/story
+3. GET http://192.168.99.100:30084/error
+4. GET http://192.168.99.100:30084/story
    * 요청이 다른 pod으로 가기때문에 기존 데이터를 로드할 수 없다.
-   * 데이터 접근불가
 
 
 
@@ -274,7 +277,7 @@ kubectl apply -f deployment.yaml
 
 
 
-### exi동작 확인하기
+### 동작 확인하기
 
 1. GET http://192.168.99.100:30084/story
    * 정삭작동
@@ -298,6 +301,147 @@ hi neptunes
 
 ### hostPath의 문제점
 
-* 다수의 워커노드가 있을 경우 pod들이 다른 노드들에서 실행될 경우 같은 데이터에 접근 할 수 없다.
-* 같은 노드에서 실행되는 pod끼리만 데이터를 액세스 할 수 있다.
+* 노드에 의존적이다.
+  * pod들이 다른 노드들에서 실행될 경우 같은 데이터에 접근 할 수 없다.
+  * 같은 노드에서 실행되는 pod끼리만 같은 데이터를 액세스 할 수 있다.
+
+
+
+## Persistent Volumes 적용하기
+
+
+
+### Persistent Volumes
+
+* `pod` 와 `node` 와 독립적이다.
+  * hostPath type은 node와 독립적이지 못하다.
+  * 현재는 하나의 노드 환경이니 hostPath 타입을 사용한다.
+  * [Persistent Volumes Type](https://kubernetes.io/docs/concepts/storage/persistent-volumes/#types-of-persistent-volumes)
+
+
+
+### PersistenceVolume 리소스 생성
+
+* host-pv.yaml 작성
+
+```yaml
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: host-pv
+spec:
+  capacity:
+    storage: 1Gi
+  volumeMode: Filesystem
+  storageClassName: standard
+  accessModes:
+    - ReadWriteOnce
+  hostPath:
+    path: /data
+    type: DirectoryOrCreate
+
+```
+
+* ### Volume Mode
+
+  *  `Filesystem` 와 `Block` 두가지를 지원한다.
+
+* ### Access Modes
+
+  * ReadWriteOnce: the volume can be mounted as read-write by a single node
+  * ReadOnlyMany : the volume can be mounted read-only by many nodes
+  * ReadWriteMany : the volume can be mounted as read-write by many nodes
+
+
+
+### PersistenceVolumeClaim 리소스 생성
+
+* host-pvc.yaml작성
+
+```yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: host-pvc
+spec:
+  volumeName: host-pv
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: standard
+  resources:
+    requests:
+      storage: 1Gi
+
+```
+
+
+
+### Deployment.yaml 수정하기
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: story-deployment
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: story
+  template:
+    metadata:
+      labels:
+        app: story
+    spec:
+      containers:
+        - name: story
+          image: neptunes032/kub-data-demo:2
+          volumeMounts:
+            - mountPath: /app/story
+              name: story-volume
+      volumes:
+        - name: story-volume
+          persistentVolumeClaim:
+            claimName: host-pvc
+
+```
+
+```bash
+ $ kubectl apply -f host-pv.yaml -f host-pvc.yaml -f deployment.yaml
+ $ kubectl get pv
+ NAME      CAPACITY   ACCESS MODES   RECLAIM POLICY   STATUS   CLAIM              STORAGECLASS   REASON   AGE
+host-pv   1Gi        RWO            Retain           Bound    default/host-pvc   standard                2m46s
+$ kubectl get pvc
+NAME       STATUS   VOLUME    CAPACITY   ACCESS MODES   STORAGECLASS   AGE
+host-pvc   Bound    host-pv   1Gi        RWO            standard       3m8s
+```
+
+### 동작 확인하기
+
+1. GET http://192.168.99.100:30084/story
+   * 정삭작동
+2. GET http://192.168.99.100:30084/error
+3. GET http://192.168.99.100:30084/story
+   * 정상작동
+
+
+
+## Volume vs Persistent Volume
+
+### volume
+
+* 데이터를 영속화 할 수 있다.
+  * 컨테이너 재시작이나 제거해도 volume는 사라지지 않는다.
+* `pod` 에 종속적이다.
+  * `pod` 를 제거하면 `volume` 도 사라진다.
+* `pod` 와 함께 정의되고 생성된다.
+
+### Persistent volume
+
+* 데이터를 영속화 할 수 있다.
+* `pod` 와 `node` 에 독립적이다.
+  * `Persistent volume`독립적인 클러스트 리소스이다.
+* 독립적으로 생성이 가능하다.
+
+# 환경변수 사용해보기
 
