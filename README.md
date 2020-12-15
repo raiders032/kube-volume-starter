@@ -443,5 +443,122 @@ host-pvc   Bound    host-pv   1Gi        RWO            standard       3m8s
   * `Persistent volume`독립적인 클러스트 리소스이다.
 * 독립적으로 생성이 가능하다.
 
-# 환경변수 사용해보기
+
+
+___
+
+
+
+## 환경변수 사용해보기
+
+app.js 코드 변경
+
+```javascript
+# const filePath = path.join(__dirname, 'story', 'text.txt'); 어래와 같이 변경
+const filePath = path.join(__dirname, process.env.STORY_FOLDER, 'text.txt');
+```
+
+1. deployment.yaml 수정하기
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: story-deployment
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: story
+  template:
+    metadata:
+      labels:
+        app: story
+    spec:
+      containers:
+        - name: story
+          image: neptunes032/kub-data-demo:2
+          env:
+            - name: STORY_FOLDER
+              value: "story"
+          volumeMounts:
+            - mountPath: /app/story
+              name: story-volume
+      volumes:
+        - name: story-volume
+          persistentVolumeClaim:
+            claimName: host-pvc
+
+```
+
+2. 적용하기
+
+```shell
+kubectl apply -f deployment.yaml
+```
+
+
+
+### ConfigMap 리소스 생성
+
+1. Environment.yaml 작성
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: data-store-env
+data:
+  folder: "story"
+
+```
+
+2. 리소스 생성
+
+```shell
+$ kubectl apply -f environment.yaml
+$ kubectl get configmap
+NAME             DATA   AGE
+data-store-env   1      32s
+```
+
+3. deployment.yaml 수정하고 적용하기
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: story-deployment
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: story
+  template:
+    metadata:
+      labels:
+        app: story
+    spec:
+      containers:
+        - name: story
+          image: neptunes032/kub-data-demo:2
+          env:
+            - name: STORY_FOLDER
+              valueFrom:
+                configMapKeyRef:
+                  name: data-store-env
+                  key: folder
+          volumeMounts:
+            - mountPath: /app/story
+              name: story-volume
+      volumes:
+        - name: story-volume
+          persistentVolumeClaim:
+            claimName: host-pvc
+
+```
+
+```
+kubectl apply -f deployment.yaml
+```
 
